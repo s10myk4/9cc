@@ -8,4 +8,10 @@ test: 9cc
 clean:
 	rm -f9cc *.o *~ tmp*
 
-.PHONY: test clean
+docker/build:
+	docker build -t compilebook .
+
+docker/run:
+	docker run --rm -it -v $(HOME)/9cc:/9cc compilebook
+
+.PHONY: test clean docker
