@@ -21,12 +21,20 @@ struct Token {
   char *str;
 };
 
+//current token
 Token *token;
+//input program
+char *user_input;
 
-//func to  report error
-void error(char *fmt, ...) {
+//report an error location & exit
+void error_at(char *loc, char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
+
+    int pos = loc - user_input;
+    fprintf(stderr, "%s\n", user_input);
+    fprintf(stderr, "%*s", pos, "");
+    fprintf(stderr, "^ ");
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\n");
     exit(1);
@@ -42,14 +50,14 @@ bool consume(char op) {
 
 bool expect(char op) {
   if (token->kind != TK_RESERVE || token->str[0] != op)
-    error("'%c'ではありません", op);
+    error_at(token->str, "expected '%c'", op);
   token = token->next;
 }
 
 //次のトークンが数値の場合、トークンを1つ読み進めてその数値を返す
 int expect_number() {
   if (token->kind != TK_NUM)
-    error("数ではありません");
+    error_at(token->str, "expected a number");
   int val = token->val;
   token = token->next;
   return val;
@@ -68,7 +76,8 @@ Token *new_token(TokenKind kind, Token *cur, char *str) {
   return tok;
 }
 
-Token *tokenize(char *p) {
+Token *tokenize() {
+  char *p = user_input;
   Token head;
   head.next = NULL;
   Token *cur = &head;
@@ -90,7 +99,7 @@ Token *tokenize(char *p) {
       continue;
     }
 
-    error("トークナイズに失敗しました");
+    error_at(p, "expected a number");
   }
 
   new_token(TK_EOF, cur, p);
@@ -99,11 +108,12 @@ Token *tokenize(char *p) {
 
 int main(int argc, char **argv) {
   if (argc != 2) {
-    fprintf(stderr, "引数の個数が正しくありません\n");
+    fprintf(stderr, "Incorrect number of args\n");
     return 1;
   }
 
-  token = tokenize(argv[1]);
+  user_input = argv[1];
+  token = tokenize();
 
   printf(".intel_syntax noprefix\n");
   printf(".global main\n");
@@ -111,9 +121,10 @@ int main(int argc, char **argv) {
 
   //式の先頭は数字である必要があるので、それをチェック
   //最初のmov命令を出力
-  printf("  mov rax, %d\n",expect_number());
+  printf("  mov rax, %d\n", expect_number());
 
-  while (!at_eof()) {
+  //+ <数> or - <数> のトークンの並びを消費しつつアセンブリを出力 
+  while (!at_eof()){
     if (consume('+')) {
       printf("  add rax, %d\n", expect_number());
       continue;
