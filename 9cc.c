@@ -155,6 +155,7 @@ Node *new_num(int val) {
 Node *expr();
 Node *mul();
 Node *primary();
+Node *unary();
 
 // expr = mul ("+" mul | "-" mul)*
 Node *expr() {
@@ -169,9 +170,9 @@ Node *expr() {
   }
 }
 
-// expr = primary ("*" primary | "/" primary)*
+// mul = unary ("*" unary | "/" unary)*
 Node *mul() {
-  Node *node = primary();
+  Node *node = unary();
   for (;;) {
     if (consume('*'))
       node = new_binary(ND_MUL, node, primary());
@@ -190,6 +191,16 @@ Node *primary() {
     return node;
   }
   return new_num(expect_number());
+}
+
+// unary = ("+" | "-")? unary
+//        | primary
+Node *unary() {
+  if (consume('+'))
+    return unary();
+  if (consume('-'))
+    return new_binary(ND_SUB, new_num(0), unary());
+  return primary();
 }
 
 void gen(Node *node) {
