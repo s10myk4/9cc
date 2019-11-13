@@ -1,12 +1,17 @@
 CFLAGS=-std=c11 -g -static -fno-common
+SRCS=$(wildcard *.c)
+OBJS=$(SRCS:.c=.o)
 
-9cc: 9cc.c
+9cc: $(OBJS)
+	$(CC) -o $@ $(OBJS) $(LDFLAGS)
+
+$(OBJS): 9cc.h
 
 test: 9cc
 	./test.sh
 
 clean:
-	rm -f9cc *.o *~ tmp*
+	rm -f 9cc *.o *~ tmp*
 
 docker/build:
 	docker build -t compilebook .
