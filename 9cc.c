@@ -52,7 +52,7 @@ void error_at(char *loc, char *fmt, ...) {
 
 //次のトークンが期待している記号の場合は、トークンを１つ読み進めてtrueを返す
 bool consume(char *op) {
-  if (token->kind != TK_RESERVE || token->length != strlen(op) ||
+  if (token->kind != TK_RESERVE || strlen(op) != token->length ||
       memcmp(token->str, op, token->length))
     return false;
 
@@ -61,9 +61,9 @@ bool consume(char *op) {
 }
 
 bool expect(char *op) {
-  if (token->kind != TK_RESERVE || token->length != strlen(op) ||
+  if (token->kind != TK_RESERVE || strlen(op) != token->length ||
       memcmp(token->str, op, token->length))
-    error_at(token->str, "expected '%c'", op);
+    error_at(token->str, "expected \"%s\"", op);
   token = token->next;
 }
 
@@ -82,7 +82,7 @@ bool at_eof() {
 
 //トークンを作成し、curにつなげる
 Token *new_token(TokenKind kind, Token *cur, char *str, int length) {
-  Token *tok = calloc(length, sizeof(Token));
+  Token *tok = calloc(1, sizeof(Token));
   tok->kind = kind;
   tok->str = str;
   tok->length = length;
@@ -91,7 +91,7 @@ Token *new_token(TokenKind kind, Token *cur, char *str, int length) {
 }
 
 bool startswith(char *p, char *q) {
-    return memcmp(p, q, strlen(q)) == 0;
+  return memcmp(p, q, strlen(q)) == 0;
 }
 
 Token *tokenize() {
@@ -101,8 +101,10 @@ Token *tokenize() {
   Token *cur = &head;
 
   while (*p) {
-    if (isspace(*p))
-      p++;continue;
+    if (isspace(*p)) {
+      p++;
+      continue;
+    }
 
     //Multi letter punctuator
     if (startswith(p, "==") || startswith(p, "!=") ||
@@ -114,8 +116,10 @@ Token *tokenize() {
     }
 
     //single letter punctuator
-    if (strchr("+-*/()", *p))
-      cur = new_token(TK_RESERVE, cur, p++, 1);continue;
+    if (strchr("+-*/()<>", *p)) {
+      cur = new_token(TK_RESERVE, cur, p++, 1);
+      continue;
+    }
 
     //integer literal
     if (isdigit(*p)) {
@@ -174,18 +178,54 @@ Node *new_num(int val) {
 }
 
 Node *expr();
-Node *mul();
-Node *primary();
-Node *unary();
-Node *add();
 Node *equality();
 Node *relational();
+Node *add();
+Node *mul();
+Node *unary();
+Node *primary();
+
+//expr = equality
+Node *expr() {
+  return equality();
+}
+
+// equality = relational ("==" relational || "!=" relational)*
+Node *equality() {
+  Node *node = relational();
+  for (;;) {
+    if (consume("=="))
+      node = new_binary(ND_EQ, node, relational());
+    else if (consume("!="))
+      node = new_binary(ND_NE, node, relational());
+    else
+      return node;
+  }
+}
+
+//relational = add ("<" add | "<=" add | ">" add | ">=" add)*
+Node *relational() {
+  Node *node = add();
+  for (;;) {
+    if (consume("<"))
+      node = new_binary(ND_LT, node, add());
+    else if (consume("<="))
+      node = new_binary(ND_LE, node, add());
+    else if (consume(">"))
+      node = new_binary(ND_LT, add(), node);
+    else if (consume(">="))
+      node = new_binary(ND_LE, add(), node);
+    else
+      return node;
+  }
+}
+
 
 // add = mul ("+" mul | "-" mul)*
 Node *add() {
   Node *node = mul();
   for (;;) {
-    if (consume("="))
+    if (consume("+"))
       node = new_binary(ND_ADD, node, mul());
     else if (consume("-"))
       node = new_binary(ND_SUB, node, mul());
@@ -207,16 +247,6 @@ Node *mul() {
   }
 }
 
-// primary = "(" expr ")" | num
-Node *primary() {
-  if (consume("(")) {
-    Node *node = expr();
-    expect(")");
-    return node;
-  }
-  return new_num(expect_number());
-}
-
 // unary = ("+" | "-")? unary
 //        | primary
 Node *unary() {
@@ -227,39 +257,14 @@ Node *unary() {
   return primary();
 }
 
-//relational = add ("<" add | "<=" add | ">" add | ">=" add)*
-Node *relational() {
-  Node *node = add();
-  for (;;) {
-    if (consume("<"))
-      node = new_binary(ND_LT, node, add());
-    else if (consume("<="))
-      node = new_binary(ND_LE, node, add());
-    else if (consume(">"))
-      node = new_binary(ND_LT, add(), node);
-    else if (consume(">="))
-      node = new_binary(ND_LE, add(), node);
-    else
-      return node;
+// primary = "(" expr ")" | num
+Node *primary() {
+  if (consume("(")) {
+    Node *node = expr();
+    expect(")");
+    return node;
   }
-}
-
-// equality = relational ("==" relational || "!=" relational)*
-Node *equality() {
-  Node *node = relational();
-  for (;;) {
-    if (consume("=="))
-      node = new_binary(ND_EQ, node, relational());
-    else if (consume("!="))
-      node = new_binary(ND_NE, node, relational());
-    else
-      return node;
-  }
-}
-
-//expr = equality
-Node *expr() {
-  return equality();
+  return new_num(expect_number());
 }
 
 void gen(Node *node) {
@@ -287,6 +292,26 @@ void gen(Node *node) {
     case ND_DIV:
       printf("  cqo\n");
       printf("  idiv rdi\n");
+      break;
+    case ND_EQ:
+      printf("  cmp rax, rdi\n");
+      printf("  sete al\n");
+      printf("  movzb rax, al\n");
+      break;
+    case ND_NE:
+      printf("  cmp rax, rdi\n");
+      printf("  setne al\n");
+      printf("  movzb rax, al\n");
+      break;
+    case ND_LT:
+      printf("  cmp rax, rdi\n");
+      printf("  setl al\n");
+      printf("  movzb rax, al\n");
+      break;
+    case ND_LE:
+      printf("  cmp rax, rdi\n");
+      printf("  setle al\n");
+      printf("  movzb rax, al\n");
       break;
   }
 
