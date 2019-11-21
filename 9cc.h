@@ -9,6 +9,7 @@
 //kinds of token
 typedef enum {
   TK_RESERVE, //記号
+  TK_IDENT, //識別子
   TK_NUM, //整数トークン
   TK_EOF, //入力の終わりを表すトークン
 } TokenKind;
@@ -47,6 +48,7 @@ typedef enum {
   ND_LT,  // <
   ND_LE,  // <=
   ND_NUM, // integer
+
 } NodeKind;
 
 //AST node type
@@ -54,12 +56,13 @@ typedef struct Node Node;
 
 struct Node {
   NodeKind kind;
+  Node *next;
   Node *lhs;
   Node *rhs;
   int val; //use if kind == ND_NUM
 };
 
-Node *expr(void);
+Node *program(void);
 
 // codegen.c
 void codegen(Node *node);

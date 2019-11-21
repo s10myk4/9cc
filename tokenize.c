@@ -91,7 +91,7 @@ Token *tokenize() {
     }
 
     //single letter punctuator
-    if (strchr("+-*/()<>", *p)) {
+    if (strchr("+-*/()<>;", *p)) {
       cur = new_token(TK_RESERVE, cur, p++, 1);
       continue;
     }

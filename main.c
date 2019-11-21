@@ -9,7 +9,7 @@ int main(int argc, char **argv) {
   token = tokenize();
 
   //parse
-  Node *node = expr();
+  Node *node = program();
 
   codegen(node);
   return 0;
